@@ -1,0 +1,28 @@
+# Environment variables
+.env
+
+# Python cache and virtual environment
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+ENV/
+llm_env/
+yojana_env/
+
+# Logs
+*.log
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Output files
+*.parquet
+*.csv
+*.log
+faiss_index/
+output/
+*.npy
