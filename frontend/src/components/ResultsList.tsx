@@ -1,6 +1,8 @@
 import React from 'react';
 import { SchemeResult } from '../types';
 import SchemeCard from './SchemeCard';
+import { FiFilter, FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import LoadingSkeleton from './LoadingSkeleton';
 
 interface ResultsListProps {
   results: SchemeResult[];
@@ -9,20 +11,16 @@ interface ResultsListProps {
 }
 
 const ResultsList: React.FC<ResultsListProps> = ({ results, isLoading, userGender }) => {
+  const [sortBy, setSortBy] = React.useState<'relevance' | 'rules' | 'semantic'>('relevance');
+  const [showFilters, setShowFilters] = React.useState(false);
+
   if (isLoading) {
-    return (
-      <div className="flex justify-center items-center py-12">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Finding the best schemes for you...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSkeleton count={3} />;
   }
 
   if (results.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-lg p-10 text-center border border-gray-200">
+      <div className="backdrop-blur-sm bg-white/70 rounded-2xl shadow-xl shadow-black/5 p-10 text-center border border-white/40">
         <svg
           className="mx-auto h-12 w-12 text-gray-400"
           fill="none"
@@ -43,17 +41,81 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, isLoading, userGende
     );
   }
 
+  const sortedResults = [...results].sort((a, b) => {
+    if (sortBy === 'relevance') return b.percent_match - a.percent_match;
+    if (sortBy === 'rules') return (b.R + b.S) - (a.R + a.S);
+    return b.F - a.F;
+  });
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-lg font-semibold text-gray-900">
-          Found {results.length} {results.length === 1 ? 'scheme' : 'schemes'}
-        </h2>
-        <div className="text-sm text-gray-500">Sorted by relevance</div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+          <div className="mb-3 sm:mb-0">
+            <h2 className="text-lg font-semibold text-gray-900">
+              {results.length} {results.length === 1 ? 'Scheme' : 'Schemes'} Found
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">Sorted by {sortBy === 'relevance' ? 'relevance' : sortBy === 'rules' ? 'rules score' : 'semantic match'}</p>
+          </div>
+          <div className="w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+              <div className="relative">
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <FiFilter className="mr-2 h-4 w-4" />
+                  {showFilters ? 'Hide filters' : 'Filters'}
+                </button>
+                {showFilters && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 z-10">
+                    <div className="p-4 space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Sort by</label>
+                        <select
+                          value={sortBy}
+                          onChange={(e) => setSortBy(e.target.value as 'relevance' | 'rules' | 'semantic')}
+                          className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg"
+                        >
+                          <option value="relevance">Relevance</option>
+                          <option value="rules">Rules Score (R+S)</option>
+                          <option value="semantic">Semantic Match (F)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="inline-flex rounded-md shadow-sm" role="group">
+                <button
+                  type="button"
+                  onClick={() => setSortBy('relevance')}
+                  className={`px-4 py-2 text-sm font-medium rounded-l-lg ${sortBy === 'relevance' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'} border border-gray-300 focus:z-10 focus:ring-2 focus:ring-blue-500`}
+                >
+                  Relevance
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSortBy('rules')}
+                  className={`px-4 py-2 text-sm font-medium ${sortBy === 'rules' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'} border border-gray-300 focus:z-10 focus:ring-2 focus:ring-blue-500`}
+                >
+                  Rules Score
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSortBy('semantic')}
+                  className={`px-4 py-2 text-sm font-medium rounded-r-lg ${sortBy === 'semantic' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'} border border-gray-300 focus:z-10 focus:ring-2 focus:ring-blue-500`}
+                >
+                  Semantic
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-6">
-        {results.map((scheme) => (
+        {sortedResults.map((scheme) => (
           <SchemeCard 
             key={scheme.scheme_id} 
             scheme={scheme} 

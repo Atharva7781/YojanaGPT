@@ -14,3 +14,20 @@
 /* Utility helpers */
 .card { box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
 .card-hover { box-shadow: 0 10px 24px rgba(0,0,0,0.10); }
+
+/* Soft grid background helper */
+.bg-grid {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(0,0,0,0.06) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, rgba(0,0,0,0.05) 25%, rgba(0,0,0,0.08) 37%, rgba(0,0,0,0.05) 63%);
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite linear;
+}
