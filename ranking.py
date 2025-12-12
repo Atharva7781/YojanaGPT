@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 import pandas as pd
 from user_profile_model import UserProfile
 import logging
@@ -186,7 +186,8 @@ def rank_schemes(
                 'percent_match': percent_match,
                 'rule_breakdown': rule_result.get('breakdown', {}),
                 'source_url': scheme_data.get('source_url', ''),
-                'description': scheme_data.get('description_raw', '')[:200] + '...'  # Truncate long descriptions
+                'description': scheme_data.get('description_raw', '')[:200] + '...',
+                'eligibility_structured': eligibility_structured
             }
             
             results.append(result)
@@ -200,6 +201,42 @@ def rank_schemes(
     
     # Return top_k results
     return results[:top_k]
+
+def _extract_scheme_gender(eligibility_structured: Dict[str, Any]) -> Optional[str]:
+    try:
+        if not eligibility_structured:
+            return None
+        req = eligibility_structured.get("required", [])
+        for clause in req:
+            if clause.get("field") == "gender":
+                val = clause.get("value")
+                if val is None:
+                    return None
+                v = str(val).strip().lower()
+                if v in ("female", "f", "women", "woman", "mahila"):
+                    return "female"
+                if v in ("male", "m", "man", "men"):
+                    return "male"
+                return None
+    except Exception:
+        return None
+    return None
+
+def split_by_gender_buckets(ranked_schemes: List[Dict]) -> Dict[str, List[Dict]]:
+    male: List[Dict] = []
+    female: List[Dict] = []
+    for s in ranked_schemes:
+        elig = s.get("eligibility_structured") or {}
+        scheme_gender = _extract_scheme_gender(elig)
+        if scheme_gender == "female":
+            female.append(s)
+            continue
+        if scheme_gender == "male":
+            male.append(s)
+            continue
+        male.append(s)
+        female.append(s)
+    return {"male": male, "female": female}
 
 # Example usage
 if __name__ == "__main__":

@@ -245,6 +245,19 @@ class EligibilityExtractor:
                     use_clause["confidence"] = max(0.75, float(use_clause.get("confidence", 0.75)))
                     structured["required"].append(use_clause)
             self._cache_llm_result(scheme_id, validated)
+        # Gender fallback if missing or low-confidence
+        if (not has_field("gender")) or (best_conf("gender") < 0.75):
+            g_resp = self._call_llm_gender(elig_text)
+            g_val = self._validate_and_canonicalize_gender_llm(g_resp or {})
+            if g_val.get("gender") is not None and float(g_val.get("confidence", 0.0)) >= 0.75:
+                structured["required"].append({
+                    "field": "gender",
+                    "operator": "=",
+                    "value": g_val["gender"],
+                    "text_span": g_val.get("evidence", ""),
+                    "confidence": g_val.get("confidence", 0.75),
+                    "source": g_val.get("source", "llm_fallback")
+                })
         return structured
 
     def _call_llm_fallback(self, text: str) -> Optional[Dict[str, Any]]:
@@ -322,6 +335,67 @@ class EligibilityExtractor:
                 json.dump(self._llm_cache, f)
         except Exception:
             pass
+
+    def _call_llm_gender(self, text: str) -> Optional[Dict[str, Any]]:
+        try:
+            import os
+            import google.generativeai as genai
+            api_key = os.getenv("GOOGLE_API_KEY")
+            if not api_key:
+                return None
+            genai.configure(api_key=api_key)
+            system_prompt = (
+                "You are a high-precision extractor that converts human-written eligibility text into structured rules.\n"
+                "Return ONLY a JSON object (no explanation) that contains any gender-related eligibility you can confidently infer.\n\n"
+                "Rules:\n"
+                "- Look only for explicit statements about gender in the input text.\n"
+                "- Do NOT infer gender from program names (unless the text explicitly says \"for women\" / \"for men\").\n"
+                "- If the text says \"women\", \"women only\", \"female\", \"female beneficiaries\", set gender = \"female\".\n"
+                "- If the text says \"men\", \"male\", \"males\", \"men only\", set gender = \"male\".\n"
+                "- If the text allows both or has no mention, return gender = null.\n"
+                "- If the text has conditional text like \"women and men\", treat as null (no restriction).\n"
+                "- Provide a short `evidence` string (text snippet from input) that justifies the extraction.\n"
+                "- Assign a `confidence` value between 0.5 and 0.95 — be conservative. Use 0.90 for explicit exact matches (\"for women\", \"for men\"), 0.75 for ambiguous wording like \"targeting women\", and 0.5 for weak hints.\n"
+                "- Use lower-case canonical values for gender: \"male\" or \"female\".\n"
+                "- Output must be valid JSON with the exact keys: `gender`, `evidence`, `confidence`, `source`."
+            )
+            user_prompt = f"Here is the eligibility text to parse:\n\n{text}\n\nReturn the JSON object now."
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            resp = model.generate_content([
+                {"role": "system", "parts": [system_prompt]},
+                {"role": "user", "parts": [user_prompt]},
+            ], generation_config={"temperature": 0.0})
+            if not resp or not getattr(resp, "text", None):
+                return None
+            raw = resp.text.strip()
+            return json.loads(raw)
+        except Exception:
+            return None
+
+    def _validate_and_canonicalize_gender_llm(self, llm_resp: dict) -> dict:
+        out = {"gender": None, "evidence": "", "confidence": 0.0, "source": "llm_fallback"}
+        if not isinstance(llm_resp, dict):
+            return out
+        gender = llm_resp.get("gender")
+        if isinstance(gender, str):
+            g = gender.strip().lower()
+            if g in ("female", "women", "woman"):
+                out["gender"] = "female"
+            elif g in ("male", "men", "man"):
+                out["gender"] = "male"
+            else:
+                out["gender"] = None
+        evidence = llm_resp.get("evidence")
+        if isinstance(evidence, str):
+            out["evidence"] = evidence.strip()
+        try:
+            conf = float(llm_resp.get("confidence", 0.0))
+        except Exception:
+            conf = 0.0
+        out["confidence"] = max(0.0, min(0.95, conf))
+        src = llm_resp.get("source") or "llm_fallback"
+        out["source"] = str(src)
+        return out
 
         try:
             text = elig_text

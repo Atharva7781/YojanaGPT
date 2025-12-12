@@ -137,3 +137,41 @@ if __name__ == "__main__":
 
     test_karnataka_farmer()
     test_rajasthan_farmer()
+
+    # --- MAHARASHTRA PIPELINE SMOKE TEST ---
+    print("\n=== MAHARASHTRA SMOKE TEST ===")
+    maharashtra_farmer = {
+        "user_id": None,
+        "state": "Maharashtra",
+        "district": "Kolhapur",
+        "pincode": None,
+        "age": 42,
+        "gender": "male",
+        "category": "General",
+        "income_annual": 90000.0,
+        "occupation": "Farmer",
+        "education_level": None,
+        "farmer": True,
+        "land_area": 0.6,
+        "land_type": "agricultural",
+        "disability": None,
+        "documents": {},
+        "extra_flags": {}
+    }
+    query = "subsidy for farm pond / individual farm pond / irrigation structure"
+    print("Profile:", maharashtra_farmer)
+    print("Query:", query)
+
+    # Use rank_schemes directly
+    profile_obj = UserProfile(**{k: v for k, v in maharashtra_farmer.items() if k in UserProfile.model_fields})
+    results = rank_schemes(
+        profile=profile_obj,
+        free_text=query,
+        top_k=10,
+        w_r=0.667,
+        w_s=0.333,
+        w_f=0.05
+    )
+    print("\nTop results (Maharashtra test):")
+    for i, r in enumerate(results, 1):
+        print(f"{i}. {r['scheme_name']}\n   Match: {r['percent_match']:.1f}%  R:{r['R']:.3f}  S:{r['S']:.3f}  F:{r['F']:.3f}\n   id: {r.get('scheme_id')}\n")

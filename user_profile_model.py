@@ -54,8 +54,7 @@ class UserProfile(BaseModel):
     model_config = ConfigDict(
         extra="ignore",
         arbitrary_types_allowed=True,
-        orm_mode=True,
-        allow_population_by_field_name=True,
+        validate_by_name=True,
+        from_attributes=True,
     )
-
 
