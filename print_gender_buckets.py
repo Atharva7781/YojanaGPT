@@ -18,7 +18,7 @@ def main():
     )
 
     ranked = rank_schemes(profile, free_text="subsidy for farm pond / individual farm pond / irrigation structure", top_k=200, w_r=0.667, w_s=0.333, w_f=0.05)
-    buckets = split_by_gender_buckets(ranked)
+    buckets = split_by_gender_buckets(ranked, profile.model_dump())
 
     print("\n--- MALE: top 10 ---")
     for i, s in enumerate(buckets["male"][:10], start=1):

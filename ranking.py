@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
+from gender_utils import extract_scheme_gender
 import pandas as pd
 from user_profile_model import UserProfile
 import logging
@@ -222,21 +223,34 @@ def _extract_scheme_gender(eligibility_structured: Dict[str, Any]) -> Optional[s
         return None
     return None
 
-def split_by_gender_buckets(ranked_schemes: List[Dict]) -> Dict[str, List[Dict]]:
-    male: List[Dict] = []
-    female: List[Dict] = []
+def split_by_gender_buckets(ranked_schemes: List[Dict], profile: Optional[Dict] = None) -> Dict[str, List[Dict]]:
+    male_bucket: List[Dict] = []
+    female_bucket: List[Dict] = []
+    neutral: List[Dict] = []
+    profile_gender = None
+    try:
+        if profile:
+            pg = profile.get("gender")
+            if isinstance(pg, str):
+                profile_gender = pg.strip().lower()
+    except Exception:
+        profile_gender = None
+
     for s in ranked_schemes:
-        elig = s.get("eligibility_structured") or {}
-        scheme_gender = _extract_scheme_gender(elig)
-        if scheme_gender == "female":
-            female.append(s)
+        g, conf, prov = extract_scheme_gender({
+            "scheme_name": s.get("scheme_name"),
+            "eligibility_structured": s.get("eligibility_structured"),
+            "eligibility_raw": s.get("description", "")
+        })
+        if g == "female":
+            female_bucket.append(s)
             continue
-        if scheme_gender == "male":
-            male.append(s)
+        if g == "male":
+            male_bucket.append(s)
             continue
-        male.append(s)
-        female.append(s)
-    return {"male": male, "female": female}
+        neutral.append(s)
+
+    return {"male": male_bucket + neutral, "female": female_bucket + neutral, "neutral": neutral}
 
 # Example usage
 if __name__ == "__main__":

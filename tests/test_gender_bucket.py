@@ -1,4 +1,3 @@
-import pandas as pd
 from ranking import split_by_gender_buckets
 
 def test_gender_bucket_split_smoke():
@@ -36,7 +35,7 @@ def test_gender_bucket_split_smoke():
         },
     ]
 
-    buckets = split_by_gender_buckets(ranked_results)
+    buckets = split_by_gender_buckets(ranked_results, {"gender": "male"})
 
     female_ids = [s['scheme_id'] for s in buckets['female']]
     male_ids = [s['scheme_id'] for s in buckets['male']]
