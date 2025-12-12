@@ -68,7 +68,9 @@ if confidence_values:
 else:
     print("No confidence values found in clauses (extractor didn't set confidence)")
 
-df["num_clauses"] = df[col].apply(lambda x: len(safe_load(x).get("required", [])) + len(safe_load(x).get("optional", [])))
+df["num_clauses"] = df[col].apply(lambda x: (
+    len((safe_load(x) or {}).get("required", [])) + len((safe_load(x) or {}).get("optional", []))
+))
 top = df.sort_values("num_clauses", ascending=False).head(10)[["scheme_id", "scheme_name", "num_clauses"]]
 print("\nTop 10 schemes by clause count:")
 print(top.to_string(index=False))

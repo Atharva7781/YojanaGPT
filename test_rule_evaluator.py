@@ -57,7 +57,7 @@ def test_case_1() -> None:
     }
     
     # Evaluate rules
-    results = evaluate_scheme_rules(eligibility_rules, user_profile.dict())
+    results = evaluate_scheme_rules(eligibility_rules, user_profile.model_dump())
     print_evaluation_results(results)
     
     # Expected: All required and optional rules should pass
@@ -97,7 +97,7 @@ def test_case_2() -> None:
     }
     
     # Evaluate rules
-    results = evaluate_scheme_rules(eligibility_rules, user_profile.dict())
+    results = evaluate_scheme_rules(eligibility_rules, user_profile.model_dump())
     print_evaluation_results(results)
     
     # Expected:
@@ -150,7 +150,7 @@ def test_case_3() -> None:
     }
     
     # Evaluate rules
-    results = evaluate_scheme_rules(eligibility_rules, user_profile.dict())
+    results = evaluate_scheme_rules(eligibility_rules, user_profile.model_dump())
     print_evaluation_results(results)
     
     # Expected:

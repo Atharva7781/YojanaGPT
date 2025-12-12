@@ -20,7 +20,8 @@ def safe_load(x):
         return {}
     if isinstance(x, str):
         try:
-            return json.loads(x)
+            obj = json.loads(x)
+            return obj if isinstance(obj, dict) else {}
         except Exception:
             return {}
     if isinstance(x, dict):
@@ -32,8 +33,15 @@ field_stats = defaultdict(lambda: {"count": 0, "confidences": [], "sources": Cou
 for _, row in df.iterrows():
     raw = row.get("eligibility_raw", "") or ""
     obj = safe_load(row[col])
+    if not isinstance(obj, dict):
+        obj = {}
     for bucket in ("required", "optional"):
-        for clause in obj.get(bucket, []):
+        items = obj.get(bucket) or []
+        if not isinstance(items, list):
+            continue
+        for clause in items:
+            if not isinstance(clause, dict):
+                continue
             field = clause.get("field") or "OTHER"
             conf = clause.get("confidence")
             src = clause.get("source") or "unknown"
@@ -102,4 +110,3 @@ for f in top_fields:
     print("\n")
 
 print("Diagnosis complete. Copy the list of recommended fields and a few examples above and paste them back here so I can give the single next step (regex patterns or prompt examples).")
-

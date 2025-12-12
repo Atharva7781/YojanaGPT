@@ -1,5 +1,5 @@
 from typing import Optional, Dict, List, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class UserProfile(BaseModel):
@@ -51,7 +51,11 @@ class UserProfile(BaseModel):
     documents: Dict[str, str] = {}         # e.g. {"aadhar": "yes", "caste_certificate": "no"}
     extra_flags: Dict[str, Any] = {}       # for any additional boolean or scalar flags
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(
+        extra="ignore",
+        arbitrary_types_allowed=True,
+        orm_mode=True,
+        allow_population_by_field_name=True,
+    )
 
 

@@ -4,20 +4,21 @@ import json
 import os
 from pathlib import Path
 import logging
+import argparse
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def build_faiss_index():
+def build_faiss_index(embeddings_path: str, ids_path: str, out_path: str):
     try:
         # Create faiss_index directory if it doesn't exist
-        os.makedirs('faiss_index', exist_ok=True)
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
         
         # Load embeddings and IDs
         logger.info("Loading embeddings and IDs...")
-        embeddings = np.load('faiss_index/scheme_embeddings.npy', allow_pickle=True)
-        scheme_ids = np.load('faiss_index/scheme_ids.npy', allow_pickle=True)
+        embeddings = np.load(embeddings_path, allow_pickle=True)
+        scheme_ids = np.load(ids_path, allow_pickle=True)
         
         # Verify shapes
         if len(embeddings) != len(scheme_ids):
@@ -34,7 +35,7 @@ def build_faiss_index():
         index.add(embeddings)
 
         # Save the FAISS index to faiss_index directory
-        index_file = Path('faiss_index/faiss_index.bin')
+        index_file = Path(out_path)
         faiss.write_index(index, str(index_file))
 
         # Save ID mapping in faiss_index directory
@@ -43,7 +44,8 @@ def build_faiss_index():
             'dimension': dim,
             'total_vectors': len(scheme_ids)
         }
-        with open('faiss_index/faiss_id_map.json', 'w', encoding='utf-8') as f:
+        id_map_path = Path(out_path).with_suffix('').parent / (Path(out_path).stem + '_id_map.json')
+        with open(id_map_path, 'w', encoding='utf-8') as f:
             json.dump(id_map, f, indent=2)
 
         logger.info(f"FAISS index saved to {index_file}")
@@ -67,4 +69,9 @@ if __name__ == "__main__":
         logger.error("FAISS not installed. Please install it with: pip install faiss-cpu (or faiss-gpu)")
         exit(1)
         
-    build_faiss_index()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--embeddings", default="faiss_index/scheme_embeddings.npy")
+    parser.add_argument("--ids", default="faiss_index/scheme_ids.npy")
+    parser.add_argument("--out", default="faiss_index/faiss_index.bin")
+    args = parser.parse_args()
+    build_faiss_index(args.embeddings, args.ids, args.out)

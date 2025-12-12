@@ -9,31 +9,51 @@ from user_profile_model import UserProfile
 _model = None
 _index = None
 _scheme_ids = None
+_index_path_override = None
+_ids_path_override = None
 
 def _get_model():
     """Lazy load the sentence transformer model."""
     global _model
     if _model is None:
-        _model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+        _model = SentenceTransformer("sentence-transformers/paraphrase-mpnet-base-v2")
     return _model
 
 def _get_index():
     """Lazy load the FAISS index and scheme IDs."""
     global _index, _scheme_ids
     if _index is None or _scheme_ids is None:
-        index_path = Path("faiss_index/faiss_index.bin")
-        ids_path = Path("faiss_index/scheme_ids.npy")
-        
+        # Prefer LLM-updated index if available
+        preferred_index = Path("faiss_index/faiss_index_llm.bin")
+        preferred_ids = Path("scheme_ids_llm.npy")
+        if _index_path_override and _ids_path_override:
+            index_path = Path(_index_path_override)
+            ids_path = Path(_ids_path_override)
+        elif preferred_index.exists() and preferred_ids.exists():
+            index_path = preferred_index
+            ids_path = preferred_ids
+        else:
+            index_path = Path("faiss_index/faiss_index.bin")
+            ids_path = Path("faiss_index/scheme_ids.npy")
+
         if not index_path.exists() or not ids_path.exists():
             raise FileNotFoundError(
                 f"FAISS index or scheme IDs not found at {index_path} or {ids_path}. "
                 "Please run build_faiss_index.py first."
             )
-        
+
         _index = faiss.read_index(str(index_path))
         _scheme_ids = np.load(ids_path, allow_pickle=False)
     
     return _index, _scheme_ids
+
+def set_index_paths(index_path: str, ids_path: str) -> None:
+    global _index_path_override, _ids_path_override, _index, _scheme_ids
+    _index_path_override = index_path
+    _ids_path_override = ids_path
+    # Reset loaded index so it reloads on next call
+    _index = None
+    _scheme_ids = None
 
 def build_user_doc(profile: UserProfile, free_text: str = "") -> str:
     """Create a text representation of the user profile and query."""

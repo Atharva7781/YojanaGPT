@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Global cache for schemes data
 _schemes_df = None
+SCHEMES_PATH = "schemes_with_rules.parquet"
 
 # Import with error handling to avoid circular imports
 try:
@@ -21,14 +22,18 @@ except ImportError as e:
     evaluate_scheme_rules = None  # type: ignore
     semantic_search = None  # type: ignore
 
+def set_schemes_path(path: str) -> None:
+    global SCHEMES_PATH, _schemes_df
+    SCHEMES_PATH = path
+    _schemes_df = None
+
 def load_schemes_data() -> pd.DataFrame:
     """Load and cache the schemes data."""
     global _schemes_df
     if _schemes_df is None:
         try:
-            # Use schemes_with_rules for eligibility_structured
-            _schemes_df = pd.read_parquet("schemes_with_rules.parquet")
-            logger.info(f"Loaded {len(_schemes_df)} schemes from schemes_with_rules.parquet")
+            _schemes_df = pd.read_parquet(SCHEMES_PATH)
+            logger.info(f"Loaded {len(_schemes_df)} schemes from {SCHEMES_PATH}")
         except Exception as e:
             logger.error(f"Failed to load schemes data: {e}")
             _schemes_df = pd.DataFrame()  # Return empty DataFrame on error
@@ -91,8 +96,25 @@ def rank_schemes(
     # Validate weights
     if not (0 <= w_r <= 1 and 0 <= w_s <= 1 and 0 <= w_f <= 1):
         raise ValueError("Weights must be between 0 and 1")
-    if not abs((w_r + w_s) - 1.0) < 1e-6:
-        logger.warning(f"Weights (w_r + w_s) should sum to 1.0, got {w_r + w_s}")
+
+    # Ensure weights are valid and sum to 1.0 (normalize if not)
+    # Place this after w_r, w_s, w_f are read/defined.
+    _total_rs = (w_r or 0.0) + (w_s or 0.0)
+    if abs(_total_rs - 1.0) > 1e-9:
+        # If both w_r and w_s are zero, fall back to semantic-heavy default
+        if _total_rs == 0.0:
+            w_r = 0.6
+            w_s = 0.3
+            w_f = 0.1
+            logger.warning("Weights were zero — using defaults w_r=0.6, w_s=0.3, w_f=0.1")
+        else:
+            # Normalize proportionally so w_r + w_s == 1.0, keep w_f as-is (freshness treated separately)
+            w_r = float(w_r) / _total_rs
+            w_s = float(w_s) / _total_rs
+            logger.warning("Normalized weights so (w_r + w_s) == 1.0 (new w_r=%.3f, w_s=%.3f)", w_r, w_s)
+    # Optional: clamp to [0,1]
+    w_r = max(0.0, min(1.0, w_r))
+    w_s = max(0.0, min(1.0, w_s))
     
     # Load schemes data
     schemes_df = load_schemes_data()
@@ -134,8 +156,8 @@ def rank_schemes(
                 # Parse JSON string if needed
                 if isinstance(eligibility_structured, str):
                     eligibility_structured = json.loads(eligibility_structured)
-                rule_result = evaluate_scheme_rules(eligibility_structured, profile.dict())
-                R = rule_result.get('score', 0.0)
+                rule_result = evaluate_scheme_rules(eligibility_structured, profile.model_dump())
+                R = rule_result.get('R', rule_result.get('score', 0.0))
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse eligibility_structured JSON for scheme {scheme_id}: {e}")
                 R = 0.0

@@ -1,4 +1,7 @@
 from typing import Any, Dict, List, Optional, Union
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def eval_operator(operator: str, user_value: Any, rule_value: Any) -> str:
@@ -158,10 +161,43 @@ def evaluate_scheme_rules(
     if not eligibility_structured or not user_profile:
         return result
     
+    # --- BEGIN PATCH: normalize operators & keep clauses ---
+    def _normalize_clause(clause: Dict[str, Any]) -> Dict[str, Any]:
+        c = dict(clause)
+        op = c.get("operator") or c.get("op") or ""
+        op = str(op).strip().lower()
+        if op in ("=", "==", "eq", "equals"):
+            op = "=="
+        elif op in ("!=", "neq", "not=", "not equals"):
+            op = "!="
+        elif op in (">", "gt"):
+            op = ">"
+        elif op in ("<", "lt"):
+            op = "<"
+        elif op in (">=", "gte"):
+            op = ">="
+        elif op in ("<=", "lte"):
+            op = "<="
+        c["operator"] = op
+        c.setdefault("field", "")
+        c.setdefault("value", None)
+        c["confidence"] = float(c.get("confidence", 0.5))
+        return c
+
+    def _load_clauses(eligibility_struct: Dict[str, Any]):
+        reqs = eligibility_struct.get("required") or []
+        opts = eligibility_struct.get("optional") or []
+        required_clauses = [_normalize_clause(c) for c in reqs if isinstance(c, dict)]
+        optional_clauses = [_normalize_clause(c) for c in opts if isinstance(c, dict)]
+        return required_clauses, optional_clauses
+    # --- END PATCH ---
+    
     def evaluate_rule(rule: Dict[str, Any], scope: str) -> Dict[str, Any]:
         """Evaluate a single rule and return the result."""
         field = rule.get("field", "")
         operator = rule.get("operator", "=")
+        if operator == "==":
+            operator = "="
         value = rule.get("value")
         text_span = rule.get("text_span", "")
         confidence = rule.get("confidence", 1.0)
@@ -193,10 +229,25 @@ def evaluate_scheme_rules(
         return clause, status
     
     # Evaluate required rules
-    required_rules = eligibility_structured.get("required", [])
-    for rule in required_rules:
+    required_clauses, optional_clauses = _load_clauses(eligibility_structured)
+    try:
+        logger.debug(
+            "Evaluator: loaded %d required and %d optional clauses",
+            len(required_clauses), len(optional_clauses)
+        )
+        for i, c in enumerate(required_clauses[:3]):
+            logger.debug(" req[%d] = %s", i, repr(c))
+        for i, c in enumerate(optional_clauses[:3]):
+            logger.debug(" opt[%d] = %s", i, repr(c))
+    except Exception:
+        pass
+
+    # Initialize totals based on loaded clauses
+    result["required"]["total"] = len(required_clauses)
+    result["optional"]["total"] = len(optional_clauses)
+
+    for rule in required_clauses:
         clause, status = evaluate_rule(rule, "required")
-        result["required"]["total"] += 1
         result["required"][status] += 1
         result["required"]["clauses"].append(clause)
         
@@ -209,10 +260,8 @@ def evaluate_scheme_rules(
             result["unknown_clauses"].append(clause)
     
     # Evaluate optional rules
-    optional_rules = eligibility_structured.get("optional", [])
-    for rule in optional_rules:
+    for rule in optional_clauses:
         clause, status = evaluate_rule(rule, "optional")
-        result["optional"]["total"] += 1
         result["optional"][status] += 1
         result["optional"]["clauses"].append(clause)
         

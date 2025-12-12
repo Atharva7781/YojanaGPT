@@ -1,5 +1,7 @@
+import argparse
 from user_profile_model import UserProfile
-from ranking import rank_schemes
+from ranking import rank_schemes, set_schemes_path
+from semantic_retrieval import set_index_paths
 
 def test_karnataka_farmer():
     print("\n" + "="*80)
@@ -24,7 +26,7 @@ def test_karnataka_farmer():
     query = "looking for subsidy for irrigation"
     
     print(f"Testing ranking for: {query}")
-    print("Profile:", profile.dict())
+    print("Profile:", profile.model_dump())
     print("-" * 80)
     
     # Get ranked schemes
@@ -68,7 +70,7 @@ def test_rajasthan_farmer():
     query_rj = "looking for subsidy for irrigation structures / water storage"
     
     print(f"Testing ranking for: {query_rj}")
-    print(f"Profile: {profile_rj.dict()}")
+    print(f"Profile: {profile_rj.model_dump()}")
     print("-" * 80)
     
     # Get ranked schemes
@@ -120,5 +122,18 @@ def test_rajasthan_farmer():
         print("-" * 96 + "\n")
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--faiss", dest="faiss", default=None, help="Path to FAISS index file")
+    parser.add_argument("--schemes", dest="schemes", default=None, help="Path to schemes parquet")
+    parser.add_argument("--ids", dest="ids", default=None, help="Path to scheme ids .npy")
+    args = parser.parse_args()
+
+    if args.schemes:
+        set_schemes_path(args.schemes)
+    if args.faiss:
+        # ids default alongside embeddings index name prefix
+        ids_path = args.ids if args.ids else ("scheme_ids_llm.npy" if "llm" in args.faiss else "faiss_index/scheme_ids.npy")
+        set_index_paths(args.faiss, ids_path)
+
     test_karnataka_farmer()
     test_rajasthan_farmer()

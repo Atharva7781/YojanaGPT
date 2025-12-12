@@ -2,44 +2,68 @@ import numpy as np
 import pandas as pd
 from sentence_transformers import SentenceTransformer
 from pathlib import Path
+import argparse
+
+def build_embed_doc_row(row: pd.Series) -> str:
+    name = str(row.get("scheme_name", "")).strip()
+    desc = str(row.get("description_raw", "")).strip()
+    elig = str(row.get("eligibility_raw", "")).strip()
+    state_scope = str(row.get("state_scope", "")).strip()
+    category = str(row.get("category", "")).strip()
+    source = str(row.get("source_url", "")).strip()
+    parts = [
+        name,
+        "Description:\n" + desc if desc else "",
+        "Eligibility:\n" + elig if elig else "",
+        f"State scope: {state_scope}" if state_scope else "",
+        f"Category: {category}" if category else "",
+        f"Source: {source}" if source else "",
+    ]
+    doc = "\n\n".join([p for p in parts if p])
+    if len(doc) > 4000:
+        doc = doc[:3997] + "..."
+    return doc
 
 def main():
-    # Load the data
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", default="scheme_embed_docs.parquet")
+    parser.add_argument("--model", default="sentence-transformers/paraphrase-mpnet-base-v2")
+    parser.add_argument("--out", default="faiss_index/scheme_embeddings.npy")
+    parser.add_argument("--ids_out", default="faiss_index/scheme_ids.npy")
+    args = parser.parse_args()
+
     print("Loading scheme data...")
-    df = pd.read_parquet("scheme_embed_docs.parquet")
-    
-    # Verify required columns exist
+    df = pd.read_parquet(args.input)
+
     if 'embed_doc' not in df.columns:
-        raise ValueError("Input file must contain an 'embed_doc' column")
+        if {'scheme_name','description_raw','eligibility_raw'}.issubset(df.columns):
+            df['embed_doc'] = df.apply(build_embed_doc_row, axis=1)
+        else:
+            raise ValueError("Input must have 'embed_doc' or the core text columns ('scheme_name','description_raw','eligibility_raw')")
     if 'scheme_id' not in df.columns:
-        raise ValueError("Input file must contain a 'scheme_id' column")
-    
-    # Initialize the model
+        # If not present, derive from index
+        df['scheme_id'] = df.index.astype(str)
+
     print("Loading sentence transformer model...")
-    model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-    
-    # Compute embeddings
+    model = SentenceTransformer(args.model)
+
     print("Computing embeddings (this may take a while)...")
     embed_docs = df['embed_doc'].tolist()
     embeddings = model.encode(
         embed_docs,
         convert_to_numpy=True,
-        normalize_embeddings=True  # This does L2 normalization
+        normalize_embeddings=True,
+        batch_size=64,
+        show_progress_bar=True
     )
-    
-    # Get scheme IDs in the same order
-    # Force scheme_ids to a fixed-width unicode dtype to avoid pickle issues
+
     scheme_ids = df['scheme_id'].astype(str).values.astype("U")
-    
-    # Create faiss_index directory if it doesn't exist
-    Path("faiss_index").mkdir(exist_ok=True)
-    
-    # Save the results in the faiss_index directory
+
+    Path(args.out).parent.mkdir(exist_ok=True, parents=True)
     print("Saving results...")
-    np.save("faiss_index/scheme_embeddings.npy", embeddings.astype(np.float32))
-    np.save("faiss_index/scheme_ids.npy", scheme_ids)
-    
-    # Print shapes
+    np.save(args.out, embeddings.astype(np.float32))
+    np.save(args.ids_out, scheme_ids)
+
     print("\nResults saved successfully:")
     print(f"Embeddings shape: {embeddings.shape} (num_schemes × embedding_dim)")
     print(f"Scheme IDs shape: {scheme_ids.shape}")
