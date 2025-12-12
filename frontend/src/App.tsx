@@ -1,0 +1,176 @@
+import React, { useState, useEffect } from 'react';
+import { RecommendResponse } from './types';
+import Header from './components/Header';
+import SearchForm from './components/SearchForm';
+import ResultsList from './components/ResultsList';
+import { recommendSchemes } from './api/recommend';
+import { Toaster } from 'react-hot-toast';
+import { FiAlertCircle, FiX, FiInfo, FiCheckCircle } from 'react-icons/fi';
+
+const App: React.FC = () => {
+  const [searchResults, setSearchResults] = useState<RecommendResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSearch = async (
+    query: string, 
+    profile: any, 
+    topK: number
+  ) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const results = await recommendSchemes({ query, profile }, topK);
+      setSearchResults(results);
+    } catch (err) {
+      console.error('Error fetching schemes:', err);
+      setError('Failed to fetch schemes. Please try again later.');
+      setSearchResults(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDismissError = () => {
+    setError(null);
+  };
+
+  // Add animation class when component mounts
+  const [mounted, setMounted] = useState(false);
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  return (
+    <div className={`min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 transition-opacity duration-300 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
+      <Header />
+      
+      <main className="container mx-auto px-4 sm:px-6 py-8 max-w-7xl">
+        {/* Animated background elements */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-20 -right-20 w-96 h-96 bg-primary-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
+          <div className="absolute -bottom-20 -left-20 w-96 h-96 bg-secondary-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
+          <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-emerald-100 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
+        </div>
+
+        {/* Toast Notifications */}
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            className: 'font-sans',
+            style: {
+              background: '#ffffff',
+              color: '#1f2937',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+              borderRadius: '0.5rem',
+              padding: '0.75rem 1rem',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#ffffff',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#ffffff',
+              },
+            },
+          }}
+        />
+
+        {/* Error Alert */}
+        {error && (
+          <div className="mb-8 bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg shadow-sm transition-all duration-300 transform hover:shadow-md">
+            <div className="flex items-start">
+              <div className="flex-shrink-0 pt-0.5">
+                <FiAlertCircle className="h-5 w-5 text-red-500" />
+              </div>
+              <div className="ml-3 flex-1">
+                <p className="text-sm font-medium text-red-800">
+                  {error}
+                </p>
+              </div>
+              <div className="ml-4 flex-shrink-0 flex">
+                <button
+                  onClick={handleDismissError}
+                  className="inline-flex text-red-500 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 rounded-md"
+                >
+                  <span className="sr-only">Close</span>
+                  <FiX className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="relative max-w-5xl mx-auto">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+            <div className="px-6 py-8 sm:p-10">
+              <div className="text-center mb-10">
+                <h1 className="text-3xl font-bold text-gray-900 sm:text-4xl font-display">
+                  Find Your Perfect Government Scheme
+                </h1>
+                <p className="mt-3 text-lg text-gray-600 max-w-2xl mx-auto">
+                  Get personalized recommendations for government schemes based on your profile and needs
+                </p>
+              </div>
+
+              <SearchForm 
+                onSubmit={handleSearch} 
+                isLoading={isLoading} 
+              />
+            </div>
+          </div>
+          
+          {searchResults && (
+            <div className="mt-12">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 font-display">
+                  Recommended Schemes
+                  {searchResults.profile?.gender && (
+                    <span className="ml-3 inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+                      {searchResults.profile.gender} specific results
+                    </span>
+                  )}
+                </h2>
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                  {searchResults.results.length} schemes found
+                </span>
+              </div>
+              
+              <ResultsList 
+                results={searchResults.results} 
+                isLoading={isLoading}
+                userGender={searchResults.profile?.gender}
+              />
+            </div>
+          )}
+        </div>
+      </main>
+      
+      <footer className="bg-white/80 backdrop-blur-sm border-t border-gray-200 mt-16">
+        <div className="container mx-auto px-6 py-8">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <div className="flex items-center space-x-2">
+              <span className="text-2xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
+                YojanaGPT
+              </span>
+              <span className="text-sm text-gray-500">
+                Making government schemes accessible to all
+              </span>
+            </div>
+            <p className="mt-4 text-sm text-gray-500 md:mt-0">
+              &copy; {new Date().getFullYear()} Government Scheme Recommender. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default App;

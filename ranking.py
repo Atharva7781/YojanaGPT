@@ -252,6 +252,82 @@ def split_by_gender_buckets(ranked_schemes: List[Dict], profile: Optional[Dict] 
 
     return {"male": male_bucket + neutral, "female": female_bucket + neutral, "neutral": neutral}
 
+def rank_schemes_for_profile(
+    profile: UserProfile,
+    free_text: str = "",
+    top_k: int = 10,
+    faiss_path: Optional[str] = None,
+    schemes_path: Optional[str] = None,
+    w_r: float = 0.6,
+    w_s: float = 0.4,
+    w_f: float = 0.1,
+) -> List[Dict]:
+    if schemes_path:
+        set_schemes_path(schemes_path)
+    if faiss_path:
+        try:
+            from semantic_retrieval import set_index_paths
+            ids_path = "scheme_ids_llm.npy" if "llm" in faiss_path else "faiss_index/scheme_ids.npy"
+            set_index_paths(faiss_path, ids_path)
+        except Exception:
+            pass
+
+    ranked = rank_schemes(profile=profile, free_text=free_text, top_k=top_k, w_r=w_r, w_s=w_s, w_f=w_f)
+    buckets = split_by_gender_buckets(ranked, getattr(profile, 'model_dump', lambda: {})())
+    pg = (profile.gender or "").strip().lower() if profile.gender else None
+    if pg == "male":
+        return buckets.get("male", ranked)
+    if pg == "female":
+        return buckets.get("female", ranked)
+    return buckets.get("neutral", ranked)
+
+def load_resources_for_api() -> Dict[str, Any]:
+    import os
+    import pandas as pd
+    from pathlib import Path
+    try:
+        preferred_schemes = "schemes_with_rules_llm.parquet"
+        fallback_schemes = "schemes_with_rules.parquet"
+        schemes_path = preferred_schemes if Path(preferred_schemes).exists() else fallback_schemes
+        set_schemes_path(schemes_path)
+        schemes_df = pd.read_parquet(schemes_path)
+    except Exception as e:
+        logger.error("Failed to load schemes parquet: %s", e)
+        schemes_df = pd.DataFrame()
+
+    try:
+        preferred_index = "faiss_index/faiss_index_llm.bin"
+        fallback_index = "faiss_index/faiss_index.bin"
+        ids_path = "scheme_ids_llm.npy" if Path(preferred_index).exists() else "faiss_index/scheme_ids.npy"
+        index_path = preferred_index if Path(preferred_index).exists() else fallback_index
+        from semantic_retrieval import set_index_paths, _get_index, _get_model
+        set_index_paths(index_path, ids_path)
+        faiss_index, _ = _get_index()
+        embed_model = _get_model()
+    except Exception as e:
+        logger.error("Failed to load FAISS/resources: %s", e)
+        faiss_index = None
+        embed_model = None
+
+    return {"schemes_df": schemes_df, "faiss_index": faiss_index, "embed_model": embed_model}
+
+def rank_schemes_for_api(query: str, profile: Dict[str, Any], top_k: int, resources: Dict[str, Any], gender_bucket: Optional[str] = None) -> List[Dict]:
+    try:
+        p = UserProfile(**{k: v for k, v in profile.items() if k in UserProfile.model_fields})
+    except Exception:
+        p = UserProfile()
+        for k, v in profile.items():
+            if hasattr(p, k):
+                setattr(p, k, v)
+    ranked = rank_schemes(profile=p, free_text=query, top_k=top_k)
+    buckets = split_by_gender_buckets(ranked, profile)
+    gb = (gender_bucket or profile.get("gender") or "").strip().lower()
+    if gb == "male":
+        return buckets.get("male", ranked)
+    if gb == "female":
+        return buckets.get("female", ranked)
+    return buckets.get("neutral", ranked)
+
 # Example usage
 if __name__ == "__main__":
     # Example user profile

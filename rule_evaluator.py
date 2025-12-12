@@ -100,6 +100,21 @@ def get_user_value(profile: Dict[str, Any], field_path: str) -> Any:
     except (FileNotFoundError, json.JSONDecodeError):
         mapped_field = field_path
     
+    # Special-case: effective annual income computation without mutating profile
+    try:
+        if field_path in ("income_annual", "annual_income"):
+            ia = profile.get("income_annual")
+            if ia is not None:
+                return ia
+            mi = profile.get("monthly_income")
+            if mi is not None:
+                try:
+                    return float(mi) * 12.0
+                except (TypeError, ValueError):
+                    return None
+    except Exception:
+        pass
+
     # Handle dot notation for nested fields
     keys = mapped_field.split('.')
     value = profile

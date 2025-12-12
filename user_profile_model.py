@@ -17,6 +17,7 @@ class UserProfile(BaseModel):
 
     # Socio-economic
     income_annual: Optional[float] = None  # in INR
+    monthly_income: Optional[float] = None  # in INR
     occupation: Optional[str] = None
     education_level: Optional[str] = None  # e.g. "10th", "12th", "graduate"
 
@@ -57,4 +58,3 @@ class UserProfile(BaseModel):
         validate_by_name=True,
         from_attributes=True,
     )
-
